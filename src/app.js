@@ -4,6 +4,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -26,6 +27,12 @@ app.use(cors()); // CORS
 app.use(morgan('combined')); // Logging
 app.use(express.json({ limit: '10mb' })); // Parsing JSON
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Parsing URL-encoded
+
+// Servir archivos PDF (acceso público para ejemplo, puedes proteger con auth)
+app.use(
+  '/api/v1/documents/files',
+  express.static(path.join(__dirname, 'uploads', 'documents'))
+);
 
 // Ruta de prueba
 app.get('/', (req, res) => {
@@ -55,11 +62,15 @@ apiRoutes.use('/users', require('./routes/userRoutes'));
 apiRoutes.use('/portfolios', require('./routes/portfolioRoutes'));
 apiRoutes.use('/programs', require('./routes/programRoutes'));
 apiRoutes.use('/projects', require('./routes/projectRoutes'));
-apiRoutes.use('/tasks', require('./routes/taskRoutes')); 
-// apiRoutes.use('/documents', require('./routes/documentRoutes'));
-// apiRoutes.use('/reports', require('./routes/reportRoutes'));
-// apiRoutes.use('/notifications', require('./routes/notificationRoutes'));
-// apiRoutes.use('/meetings', require('./routes/meetingRoutes'));
+apiRoutes.use('/tasks', require('./routes/taskRoutes'));
+apiRoutes.use('/project-types', require('./routes/projectTypeRoutes'));
+apiRoutes.use('/user-projects', require('./routes/userProjectRoutes'));
+apiRoutes.use('/user-tasks', require('./routes/userTaskRoutes'));
+apiRoutes.use('/documents', require('./routes/documentRoutes'));
+apiRoutes.use('/meetings', require('./routes/meetingRoutes'));
+apiRoutes.use('/dashboard', require('./routes/dashboardRoutes'));
+apiRoutes.use('/notifications', require('./routes/notificationRoutes'));
+apiRoutes.use('/superadmin-metrics', require('./routes/superadminMetricsRoutes'));
 
 // Montar las rutas en /api/v1
 app.use('/api/v1', apiRoutes);

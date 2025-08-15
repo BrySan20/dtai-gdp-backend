@@ -288,8 +288,8 @@ const checkEmailExistsExcluding = async (email, excludeId = null) => {
 };
 
 
-// Obtener usuarios disponibles para asignar a proyectos (Colaboradores y Clientes)
-const getAvailableUsers = async (roleNames = ['Colaborador', 'Cliente']) => {
+// Obtener usuarios disponibles para asignar a proyectos
+const getAvailableUsers = async (roleNames = ['Administrador','Colaborador', 'Cliente']) => {
   const placeholders = roleNames.map(() => '?').join(',');
   const query = `
     SELECT 
@@ -297,6 +297,7 @@ const getAvailableUsers = async (roleNames = ['Colaborador', 'Cliente']) => {
       u.nombre,
       u.apellido,
       u.email,
+      u.id_rol,         -- <--- AGREGAR ESTO
       r.nombre_rol
     FROM Usuarios u
     JOIN Roles r ON u.id_rol = r.id

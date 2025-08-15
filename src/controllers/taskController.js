@@ -9,6 +9,7 @@ const {
 } = require('../models/taskModel');
 const { getProjectUsers } = require('../models/projectUserRoleModel');
 const { getProjectById } = require('../models/projectModel');
+const { notify, NotificationTypes } = require('../services/notificationService');
 const { AppError } = require('../utils/errorHandler');
 
 // Obtener tareas de un proyecto
@@ -45,47 +46,53 @@ const getProjectTasksController = async (req, res, next) => {
 
 // Crear tarea en un proyecto
 const createTaskController = async (req, res, next) => {
-    try {
-        const { projectId } = req.params;
-        const {
-            nombre, descripcion, prioridad, estatus,
-            nivelRiesgo, faseCicloVida, fechaInicio, fechaVencimiento, usuarioAsignado
-        } = req.body;
+  try {
+    const { projectId } = req.params;
+    const {
+      nombre, descripcion, prioridad, estatus,
+      nivelRiesgo, faseCicloVida, fechaInicio, fechaVencimiento, usuarioAsignado
+    } = req.body;
 
-        // Verifica proyecto y permisos
-        const project = await getProjectById(projectId, req.user.id, req.user.rol);
-        if (!project) return next(new AppError('Proyecto no encontrado o sin permisos', 404));
+    const project = await getProjectById(projectId, req.user.id, req.user.rol);
+    if (!project) return next(new AppError('Proyecto no encontrado o sin permisos', 404));
 
-        // Solo usuarios del proyecto pueden ser asignados
-        const projectUsers = await getProjectUsers(projectId);
-        const validUser = projectUsers.some(u => u.id_usuario === usuarioAsignado);
-        if (!validUser) return next(new AppError('Usuario asignado no pertenece al proyecto', 400));
+    const projectUsers = await getProjectUsers(projectId);
+    const validUser = projectUsers.some(u => u.id_usuario === usuarioAsignado);
+    if (!validUser) return next(new AppError('Usuario asignado no pertenece al proyecto', 400));
 
-        const newTaskData = {
-            nombre,
-            descripcion,
-            prioridad,
-            estatus,
-            nivelRiesgo,
-            faseCicloVida,
-            fechaInicio,
-            fechaVencimiento,
-            id_proyecto: projectId,
-            id_usuario_asignado: usuarioAsignado,
-            id_creador: req.user.id
-        };
+    const newTaskData = {
+      nombre,
+      descripcion,
+      prioridad,
+      estatus,
+      nivelRiesgo,
+      faseCicloVida,
+      fechaInicio,
+      fechaVencimiento,
+      id_proyecto: projectId,
+      id_usuario_asignado: usuarioAsignado,
+      id_creador: req.user.id
+    };
 
-        const result = await createTask(newTaskData);
-        const newTask = await getTaskById(result.insertId);
+    const result = await createTask(newTaskData);
+    const newTask = await getTaskById(result.insertId);
 
-        res.status(201).json({
-            success: true,
-            message: 'Tarea creada exitosamente',
-            data: newTask
-        });
-    } catch (error) {
-        next(error);
-    }
+    // Notificar al colaborador asignado
+    await notify({
+      tipo: NotificationTypes.TAREA_ASIGNADA,
+      destinatarios: [usuarioAsignado],
+      parametros: { nombreTarea: nombre, nombreProyecto: project.nombre },
+      enlaceAccion: `/proyectos/${projectId}/tareas/${result.insertId}`
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Tarea creada exitosamente',
+      data: newTask
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 // Actualizar tarea

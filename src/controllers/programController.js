@@ -76,22 +76,21 @@ const getProgramByIdController = async (req, res, next) => {
 
 const createProgramController = async (req, res, next) => {
   try {
-    const { nombre, descripcion, id_portafolio } = req.body;
+    const { nombre, descripcion, id_portafolio, id_tipo_proyecto_programa } = req.body;
 
-    // Verificar que el portafolio pertenece al usuario
     const portfolioExists = await checkPortfolioOwnership(id_portafolio, req.user.id, req.user.rol);
     if (!portfolioExists) {
       return next(new AppError('Portafolio no encontrado o no tienes permisos para crear programas en él', 403));
     }
 
-    // Para Administradores, asignar su propio ID
     const id_administrador = req.user.rol === 'Administrador' ? req.user.id : req.body.id_administrador;
 
     const result = await createProgram({
       nombre,
       descripcion,
       id_portafolio,
-      id_administrador
+      id_administrador,
+      id_tipo_proyecto_programa
     });
 
     const newProgram = await getProgramById(result.insertId, req.user.id, req.user.rol);
@@ -111,18 +110,15 @@ const updateProgramController = async (req, res, next) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    // Verificar si el programa existe
     const existingProgram = await getProgramById(id, req.user.id, req.user.rol);
     if (!existingProgram) {
       return next(new AppError('Programa no encontrado', 404));
     }
 
-    // Los administradores no pueden cambiar el administrador del programa
     if (req.user.rol === 'Administrador') {
       delete updateData.id_administrador;
     }
 
-    // Si se está cambiando el portafolio, verificar permisos
     if (updateData.id_portafolio) {
       const portfolioExists = await checkPortfolioOwnership(updateData.id_portafolio, req.user.id, req.user.rol);
       if (!portfolioExists) {

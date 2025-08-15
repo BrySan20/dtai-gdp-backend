@@ -13,6 +13,7 @@ const {
     getProjectUsers,
     isUserAssignedToProject
 } = require('../models/projectUserRoleModel');
+const { notify, NotificationTypes } = require('../services/notificationService');
 
 const { AppError } = require('../utils/errorHandler');
 
@@ -109,7 +110,6 @@ const createProjectController = async (req, res, next) => {
     try {
         const { nombre, descripcion, estatus, nivel_riesgo, id_programa } = req.body;
 
-        // Verificar que el programa pertenece al usuario (si se especifica)
         if (id_programa) {
             const programExists = await checkProgramOwnership(id_programa, req.user.id, req.user.rol);
             if (!programExists) {
@@ -117,7 +117,6 @@ const createProjectController = async (req, res, next) => {
             }
         }
 
-        // Para Administradores, asignar su propio ID
         const id_administrador = req.user.rol === 'Administrador' ? req.user.id : req.body.id_administrador;
 
         const result = await createProject({
@@ -147,18 +146,15 @@ const updateProjectController = async (req, res, next) => {
         const updateData = req.body;
         delete updateData.miembros;
 
-        // Verificar si el proyecto existe
         const existingProject = await getProjectById(id, req.user.id, req.user.rol);
         if (!existingProject) {
             return next(new AppError('Proyecto no encontrado', 404));
         }
 
-        // Los administradores no pueden cambiar el administrador del proyecto
         if (req.user.rol === 'Administrador') {
             delete updateData.id_administrador;
         }
 
-        // Si se está cambiando el programa, verificar permisos
         if (updateData.id_programa) {
             const programExists = await checkProgramOwnership(updateData.id_programa, req.user.id, req.user.rol);
             if (!programExists) {
@@ -214,32 +210,61 @@ const deleteProjectController = async (req, res, next) => {
 
 // Asignar usuario a proyecto
 const assignUserToProjectController = async (req, res, next) => {
-    try {
-        const { projectId } = req.params;
-        const { userId, roleId } = req.body;
+  try {
+    const { projectId } = req.params;
+    const { userId, roleId } = req.body;
 
-        // Verificar que el proyecto existe y pertenece al usuario
-        const project = await getProjectById(projectId, req.user.id, req.user.rol);
-        if (!project) {
-            return next(new AppError('Proyecto no encontrado', 404));
-        }
+    console.log('📥 Datos recibidos para asignación:', { projectId, userId, roleId });
 
-        // Verificar que el usuario no esté ya asignado
-        const isAssigned = await isUserAssignedToProject(projectId, userId);
-        if (isAssigned) {
-            return next(new AppError('El usuario ya está asignado a este proyecto', 400));
-        }
-
-        await assignUserToProject(projectId, userId, roleId);
-
-        res.status(201).json({
-            success: true,
-            message: 'Usuario asignado al proyecto exitosamente'
-        });
-    } catch (error) {
-        next(error);
+    const project = await getProjectById(projectId, req.user.id, req.user.rol);
+    if (!project) {
+      console.log('❌ Proyecto no encontrado o no autorizado:', { projectId, userIdRequest: req.user.id });
+      return next(new AppError('Proyecto no encontrado', 404));
     }
+
+    console.log('📄 Proyecto encontrado:', project);
+
+    const isAssigned = await isUserAssignedToProject(projectId, userId);
+    if (isAssigned) {
+      console.log('⚠️ Usuario ya asignado al proyecto:', { projectId, userId });
+      return next(new AppError('El usuario ya está asignado a este proyecto', 400));
+    }
+
+    await assignUserToProject(projectId, userId, roleId);
+    console.log('✅ Usuario asignado correctamente al proyecto:', { projectId, userId, roleId });
+
+    // Notificar si el rol es Colaborador (3) o Cliente (4)
+    if (roleId === 3 || roleId === 4) {
+      console.log('📨 Enviando notificación de asignación al usuario:', {
+        userId,
+        roleId,
+        tipo: NotificationTypes.PROYECTO_ASIGNADO,
+        nombreProyecto: project.nombre,
+        enlace: `/proyectos/${projectId}`
+      });
+
+      await notify({
+        tipo: NotificationTypes.PROYECTO_ASIGNADO,
+        destinatarios: [userId],
+        parametros: { nombreProyecto: project.nombre },
+        enlaceAccion: `/proyectos/${projectId}`
+      });
+
+      console.log('📢 Notificación de proyecto asignado enviada al usuario');
+    } else {
+      console.log('ℹ️ Rol no requiere notificación. Rol ID:', roleId);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Usuario asignado al proyecto exitosamente'
+    });
+  } catch (error) {
+    console.error('❌ Error en assignUserToProjectController:', error);
+    next(error);
+  }
 };
+
 
 // Remover usuario de proyecto
 const removeUserFromProjectController = async (req, res, next) => {

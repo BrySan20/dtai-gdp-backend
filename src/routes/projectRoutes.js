@@ -131,8 +131,8 @@ const validateUserAssignment = [
     .withMessage('ID de rol debe ser un número válido')
     .custom((value) => {
       // Solo permitir roles de Colaborador (3) y Cliente (4)
-      if (value !== 3 && value !== 4) {
-        throw new Error('Solo se pueden asignar roles de Colaborador o Cliente');
+      if (value !== 2 && value !== 3 && value !== 4) {
+        throw new Error('Solo se pueden asignar roles de Admin, Colaborador o Cliente');
       }
       return true;
     }),

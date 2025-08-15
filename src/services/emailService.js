@@ -78,6 +78,24 @@ class EmailService {
       throw new Error('Error al enviar correo de recuperación');
     }
   }
+
+  async sendGenericNotificationEmail(email, nombre, mensaje, enlaceAccion = null) {
+    const htmlContent = `
+    <div style="font-family: Arial,sans-serif;">
+      <p>Hola ${nombre},</p>
+      <p>${mensaje}</p>
+      ${enlaceAccion ? `<p><a href="${enlaceAccion}">Ver más</a></p>` : ''}
+      <hr><p style="font-size:12px;color:#666;">No responder a este correo.</p>
+    </div>
+  `;
+    const mailOptions = {
+      from: `"${config.app.name}" <${config.email.user}>`,
+      to: email,
+      subject: 'Notificación en la plataforma',
+      html: htmlContent
+    };
+    await this.transporter.sendMail(mailOptions);
+  }
 }
 
 module.exports = new EmailService();

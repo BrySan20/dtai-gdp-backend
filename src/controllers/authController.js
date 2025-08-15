@@ -76,22 +76,22 @@ const generateVerificationCode = () => {
 const registerUser = async (req, res, next) => {
     try {
         const { nombre, apellido, email, password, telefono, id_rol, codigo } = req.body;
-        
+
         // Verificar código de verificación temporal
         const isValidCode = await verifyTemporaryCode(email, codigo);
         if (!isValidCode) {
             return next(new AppError('Código de verificación inválido o expirado', 400));
         }
-        
+
         // Verificar si el email ya existe (por seguridad)
         const emailExists = await checkEmailExists(email);
         if (emailExists) {
             return next(new AppError('El email ya está registrado', 409));
         }
-        
+
         // Hash de la contraseña
         const password_hash = await hashPassword(password);
-        
+
         // Crear usuario ACTIVO (ya verificado)
         const result = await createUser({
             nombre,
@@ -101,15 +101,15 @@ const registerUser = async (req, res, next) => {
             telefono,
             id_rol: id_rol || 3
         });
-        
+
         const userId = result.insertId;
-        
+
         // Activar usuario inmediatamente
         await updateUserStatus(userId, true);
-        
+
         // Limpiar código temporal
         await clearTemporaryVerificationCode(email);
-        
+
         res.status(201).json({
             success: true,
             message: 'Usuario registrado exitosamente',
@@ -119,7 +119,7 @@ const registerUser = async (req, res, next) => {
                 nombre
             }
         });
-        
+
     } catch (error) {
         next(error);
     }
@@ -160,30 +160,30 @@ const verifyEmail = async (req, res, next) => {
 const sendVerificationCode = async (req, res, next) => {
     try {
         const { email, nombre } = req.body;
-        
+
         // Verificar si el email ya existe
         const emailExists = await checkEmailExists(email);
         if (emailExists) {
             return next(new AppError('El email ya está registrado', 409));
         }
-        
+
         // Generar código de verificación
         const codigo = generateVerificationCode();
         const fechaExpiracion = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
-        
+
         // Guardar código temporalmente (necesitarás una tabla temporal o usar caché)
         // Por ahora, usaremos una tabla temporal o Redis
         await saveTemporaryVerificationCode(email, codigo, fechaExpiracion);
-        
+
         // Enviar email de verificación
         await emailService.sendVerificationEmail(email, nombre, codigo);
-        
+
         res.status(200).json({
             success: true,
             message: 'Código de verificación enviado exitosamente',
             data: { email }
         });
-        
+
     } catch (error) {
         next(error);
     }

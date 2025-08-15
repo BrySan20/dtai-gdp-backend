@@ -17,12 +17,18 @@ const getTasksByProject = async (projectId) => {
 };
 
 // Obtener tarea por ID
+// Obtener tarea por ID (incluyendo nombre del proyecto)
 const getTaskById = async (taskId) => {
     const query = `
-        SELECT t.*, 
-            u_asignado.nombre AS usuario_asignado_nombre, u_asignado.apellido AS usuario_asignado_apellido,
-            u_creador.nombre AS creador_nombre, u_creador.apellido AS creador_apellido
+        SELECT 
+            t.*, 
+            p.nombre AS nombre_proyecto,
+            u_asignado.nombre AS usuario_asignado_nombre, 
+            u_asignado.apellido AS usuario_asignado_apellido,
+            u_creador.nombre AS creador_nombre, 
+            u_creador.apellido AS creador_apellido
         FROM Tareas t
+        LEFT JOIN Proyectos p ON t.id_proyecto = p.id
         LEFT JOIN Usuarios u_asignado ON t.id_usuario_asignado = u_asignado.id
         LEFT JOIN Usuarios u_creador ON t.id_creador = u_creador.id
         WHERE t.id = ?
@@ -30,6 +36,7 @@ const getTaskById = async (taskId) => {
     const result = await executeQuery(query, [taskId]);
     return result[0] || null;
 };
+
 
 // Crear tarea
 const createTask = async (taskData) => {

@@ -9,50 +9,41 @@ const getAllProjectsWithPagination = async (page = 1, limit = 10, filters = {}, 
     let whereClause = 'WHERE 1=1';
     let queryParams = [];
 
-    // Si es Administrador, solo ve sus propios proyectos
     if (userRole === 'Administrador') {
         whereClause += ' AND p.id_administrador = ?';
         queryParams.push(userId);
     }
-
-    // Aplicar filtros
     if (filters.search) {
         whereClause += ' AND (p.nombre LIKE ? OR p.descripcion LIKE ?)';
         const searchTerm = `%${filters.search}%`;
         queryParams.push(searchTerm, searchTerm);
     }
-
     if (filters.programa) {
         whereClause += ' AND p.id_programa = ?';
         queryParams.push(filters.programa);
     }
-
     if (filters.administrador) {
         whereClause += ' AND p.id_administrador = ?';
         queryParams.push(filters.administrador);
     }
-
     if (filters.estatus) {
         whereClause += ' AND p.estatus = ?';
         queryParams.push(filters.estatus);
     }
-
     if (filters.nivel_riesgo) {
         whereClause += ' AND p.nivel_riesgo = ?';
         queryParams.push(filters.nivel_riesgo);
     }
 
-    // Validar campos de ordenamiento
     const validSortFields = ['fecha_creacion', 'nombre', 'estatus', 'nivel_riesgo'];
     const validSortOrders = ['ASC', 'DESC'];
 
     if (!validSortFields.includes(sortBy)) sortBy = 'fecha_creacion';
     if (!validSortOrders.includes(sortOrder.toUpperCase())) sortOrder = 'DESC';
 
-    // Consulta principal
     const query = `
         SELECT p.id, p.nombre, p.descripcion, p.estatus, p.nivel_riesgo, p.fecha_creacion, 
-               p.id_programa, p.id_administrador,
+               p.id_programa, p.id_administrador, p.id_tipo_proyecto, tp.nombre_tipo as tipo_proyecto,
                pr.nombre as programa_nombre,
                port.nombre as portafolio_nombre,
                CONCAT(u.nombre, ' ', u.apellido) as administrador_nombre,
@@ -61,12 +52,12 @@ const getAllProjectsWithPagination = async (page = 1, limit = 10, filters = {}, 
         LEFT JOIN Programas pr ON p.id_programa = pr.id
         LEFT JOIN Portafolios port ON pr.id_portafolio = port.id
         JOIN Usuarios u ON p.id_administrador = u.id
+        LEFT JOIN Tipos_Proyecto tp ON p.id_tipo_proyecto = tp.id
         ${whereClause}
         ORDER BY p.${sortBy} ${sortOrder}
         LIMIT ? OFFSET ?
     `;
 
-    // Consulta para contar total
     const countQuery = `
         SELECT COUNT(*) as total
         FROM Proyectos p
@@ -81,7 +72,6 @@ const getAllProjectsWithPagination = async (page = 1, limit = 10, filters = {}, 
         executeQuery(countQuery, queryParams)
     ]);
 
-    // Modificar el return en getAllProjectsWithPagination (línea ~80)
     const projectsWithMembers = await Promise.all(
         projects.map(async (project) => {
             const miembros = await getProjectUsers(project.id);
@@ -103,7 +93,6 @@ const getProjectById = async (id, userId = null, userRole = null) => {
     let whereClause = 'WHERE p.id = ?';
     let queryParams = [id];
 
-    // Si es Administrador, solo puede ver sus propios proyectos
     if (userRole === 'Administrador') {
         whereClause += ' AND p.id_administrador = ?';
         queryParams.push(userId);
@@ -111,7 +100,7 @@ const getProjectById = async (id, userId = null, userRole = null) => {
 
     const query = `
         SELECT p.id, p.nombre, p.descripcion, p.estatus, p.nivel_riesgo, p.fecha_creacion, 
-               p.id_programa, p.id_administrador,
+               p.id_programa, p.id_administrador, p.id_tipo_proyecto, tp.nombre_tipo as tipo_proyecto,
                pr.nombre as programa_nombre,
                port.nombre as portafolio_nombre,
                CONCAT(u.nombre, ' ', u.apellido) as administrador_nombre,
@@ -120,6 +109,7 @@ const getProjectById = async (id, userId = null, userRole = null) => {
         LEFT JOIN Programas pr ON p.id_programa = pr.id
         LEFT JOIN Portafolios port ON pr.id_portafolio = port.id
         JOIN Usuarios u ON p.id_administrador = u.id
+        LEFT JOIN Tipos_Proyecto tp ON p.id_tipo_proyecto = tp.id
         ${whereClause}
     `;
 
@@ -130,12 +120,20 @@ const getProjectById = async (id, userId = null, userRole = null) => {
 // Crear proyecto
 const createProject = async (projectData) => {
     const { nombre, descripcion, estatus = 'Activo', nivel_riesgo = 'Nulo', id_programa, id_administrador } = projectData;
-    const query = `
-        INSERT INTO Proyectos (nombre, descripcion, estatus, nivel_riesgo, id_programa, id_administrador)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `;
 
-    return await executeQuery(query, [nombre, descripcion, estatus, nivel_riesgo, id_programa, id_administrador]);
+    // Obtener el tipo de proyecto del programa
+    const tipoQuery = `SELECT id_tipo_proyecto_programa FROM Programas WHERE id = ?`;
+    const tipoResult = await executeQuery(tipoQuery, [id_programa]);
+    if (!tipoResult.length || !tipoResult[0].id_tipo_proyecto_programa) {
+        throw new Error('El programa no tiene tipo de proyecto definido');
+    }
+    const id_tipo_proyecto = tipoResult[0].id_tipo_proyecto_programa;
+
+    const query = `
+        INSERT INTO Proyectos (nombre, descripcion, estatus, nivel_riesgo, id_programa, id_administrador, id_tipo_proyecto)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    return await executeQuery(query, [nombre, descripcion, estatus, nivel_riesgo, id_programa, id_administrador, id_tipo_proyecto]);
 };
 
 // Actualizar proyecto
@@ -143,7 +141,6 @@ const updateProject = async (id, updateData, userId = null, userRole = null) => 
     const fields = [];
     const values = [];
 
-    // Construir dinámicamente la consulta UPDATE
     Object.keys(updateData).forEach(key => {
         if (updateData[key] !== undefined && key !== 'id') {
             fields.push(`${key} = ?`);
@@ -159,7 +156,6 @@ const updateProject = async (id, updateData, userId = null, userRole = null) => 
 
     let whereClause = 'WHERE id = ?';
 
-    // Si es Administrador, solo puede actualizar sus propios proyectos
     if (userRole === 'Administrador') {
         whereClause += ' AND id_administrador = ?';
         values.push(userId);
@@ -173,6 +169,7 @@ const updateProject = async (id, updateData, userId = null, userRole = null) => 
 
     return await executeQuery(query, values);
 };
+
 
 // Eliminar proyecto
 const deleteProject = async (id, userId = null, userRole = null) => {

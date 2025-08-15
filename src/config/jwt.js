@@ -1,3 +1,4 @@
+// File: backend/src/config/jwt.js
 const config = require('./config');
 
 const jwtConfig = {
